@@ -1,0 +1,9 @@
+*.pyc
+.DS_Store
+
+# Pipeline outputs
+[Ll]ogs
+[Rr]esults
+
+# virtual environments
+venv

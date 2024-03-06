@@ -1,0 +1,11 @@
+# Core
+numpy
+pandas
+rasterio
+geopandas
+
+# Utilitys
+rich
+
+
+
