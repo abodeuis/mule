@@ -15,11 +15,11 @@ def loadLegendJson(filepath:Path, type_filter:MapUnitType=MapUnitType.ALL()) -> 
     if json_data['version'] in ['5.0.1', '5.0.2']:
         legend = _loadUSGSLegendJson(filepath, type_filter)
     else:
-        legend = _loadMULELegendJson(filepath, type_filter)
+        legend = _loadMULELegend(filepath, type_filter)
     return legend
 
 
-def _loadUSGSLegendJson(filepath:Path, type_filter:MapUnitType) -> Legend:
+def _loadUSGSLegendJson(filepath:Path, type_filter:MapUnitType=MapUnitType.ALL()) -> Legend:
     with open(filepath, 'r') as fh:
         json_data = json.load(fh)
     legend = Legend(provenance='USGS')
@@ -30,12 +30,14 @@ def _loadUSGSLegendJson(filepath:Path, type_filter:MapUnitType) -> Legend:
             continue
         # Remove type encoding from label
         unit_label = m['label']
+        unit_label = ' '.join(unit_label.split('_'))
         if unit_type != MapUnitType.UNKNOWN:
-            unit_label = ' '.join(unit_label.split('_')[:-1])
+            unit_label = ' '.join(unit_label.split(' ')[:-1])
+
         legend.features[unit_label] = MapUnit(label=unit_label, type=unit_type, bbox=np.array(m['points']).astype(int), provenance='USGS')
     return legend
 
-def _loadMULELegendJson(filepath:Path, type_filter:MapUnitType) -> Legend:
+def _loadMULELegend(filepath:Path, type_filter:MapUnitType=MapUnitType.ALL()) -> Legend:
     with open(filepath, 'r') as fh:
         json_data = json.load(fh)
     legend = Legend(provenance='MULE')
@@ -43,9 +45,8 @@ def _loadMULELegendJson(filepath:Path, type_filter:MapUnitType) -> Legend:
     raise NotImplementedError('MULE legend loading not yet implemented')
     return legend
 
-def saveLegend(filepath:Path, legend:Legend):
-    with open(filepath, 'w') as fh:
-        json.dump(legend.to_dict(), fh)
+def saveMULELegend(filepath:Path, legend:Legend):
+    raise NotImplementedError('MULE legend saving not yet implemented')
 
 def parallelLoadLegends(filepaths, type_filter:MapUnitType=MapUnitType.ALL(), threads:int=32):
     with ThreadPoolExecutor(max_workers=threads) as executor:
@@ -58,13 +59,20 @@ def parallelLoadLegends(filepaths, type_filter:MapUnitType=MapUnitType.ALL(), th
 ### Layout
 def loadLayoutJson(filepath:Path) -> Layout:
     with open(filepath, 'r') as fh:
-        for line in fh:
-            json_data = json.load(line)
-            if json_data['name'] == 'segmentation':
-                layout = _loadUnchartedLayoutv2Json(filepath)
-            else:
-                layout = _loadUnchartedLayoutv1Json(filepath)
-            break
+        layout_version = 1
+        try:
+            for line in fh:
+                json_data = json.loads(line)
+                if json_data['name'] == 'segmentation':
+                    layout_version = 2
+                break
+        except:
+            layout_version = 1
+            pass
+        if layout_version == 1:
+            layout = _loadUnchartedLayoutv1Json(filepath)
+        else:
+            layout = _loadUnchartedLayoutv2Json(filepath)
     return layout
 
 def _loadUnchartedLayoutv1Json(filepath:Path) -> Layout:
@@ -80,6 +88,8 @@ def _loadUnchartedLayoutv1Json(filepath:Path) -> Layout:
             layout.line_legend = bounds
         if section['name'] == 'map':
             layout.map = bounds
+        elif section['name'] == 'correlation_diagram':
+            layout.correlation_diagram = bounds
         elif section['name'] == 'cross_section':
             layout.cross_section = bounds
         elif section['name'] == 'legend_points':
@@ -103,6 +113,8 @@ def _loadUnchartedLayoutv2Json(filepath:Path) -> Layout:
                 layout.line_legend = bounds
             if section_name == 'map':
                 layout.map = bounds
+            elif section_name == 'correlation_diagram':
+                layout.correlation_diagram = bounds
             elif section_name == 'cross_section':
                 layout.cross_section = bounds
             elif section_name == 'legend_points':
@@ -112,6 +124,10 @@ def _loadUnchartedLayoutv2Json(filepath:Path) -> Layout:
             elif section_name == 'legend_polygons':
                 layout.polygon_legend = bounds
     return layout
+
+def saveMULELayout(filepath:Path, layout:Layout):
+    # TODO
+    raise NotImplementedError('MULE layout saving not yet implemented')
 
 def parallelLoadLayouts(filepaths, threads:int=32):
     with ThreadPoolExecutor(max_workers=threads) as executor:
@@ -123,9 +139,23 @@ def parallelLoadLayouts(filepaths, threads:int=32):
 
 ### GeoReference
 # TODO
+def loadGeoReference(filepath:Path) -> GeoReference:
+    # TODO
+    raise NotImplementedError('GeoReference loading not yet implemented')
+
+def saveMULEGeoReference(filepath:Path, georef:GeoReference):
+    # TODO
+    raise NotImplementedError('MULE georef saving not yet implemented')
 
 ### Map Metadata
 # TODO
+def loadMapMetadata(filepath:Path):
+    # TODO
+    raise NotImplementedError('Map metadata loading not yet implemented')
+
+def saveMULEMapMetadata(filepath:Path, metadata):
+    # TODO
+    raise NotImplementedError('MULE metadata saving not yet implemented')
 
 ### GeoTiff
 def loadGeoTiff(filepath:Path):
@@ -226,6 +256,7 @@ def parallelLoadCMASSMaps(map_files, legend_path=None, layout_path=None, process
         results = p.starmap(loadCMASSMap, map_args)
 
     return results
+
 
 ### Segmentations
 def saveGeoJson(filepath:Path, geoDataFrame:gpd.GeoDataFrame):

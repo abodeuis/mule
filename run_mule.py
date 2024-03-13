@@ -3,9 +3,9 @@ import argparse
 import logging
 from time import time, sleep
 
-import cmaas_io as io
+import src.cmaas_io as io
 import src.utils as utils
-from src.horizontal_pipeline_manager import horizontal_pipeline_manager, pipeline_step, pipeline_data_stream
+from src.vertical_processing_pipeline import vertical_processing_pipeline, vertical_pipeline_step, parameter_data_stream
 
 LOGGER_NAME = 'CMASS_MULE'
 
@@ -102,7 +102,7 @@ def parse_command_line():
 def load_map_wrapper(image_path, legend_path=None, layout_path=None, georef_path=None):
     """Wrapper with a custom display for the monitor"""
     map_data = io.loadCMASSMap(image_path, legend_path, layout_path, georef_path)
-    horizontal_pipeline_manager.log_to_monitor(map_data.name, {'Shape': map_data.shape})
+    vertical_processing_pipeline.log_to_monitor(map_data.name, {'Shape': map_data.shape})
     return map_data
 
 # Step 1
@@ -116,9 +116,9 @@ def add_layout_data(map_data, layout_file):
                 width = max_xy[0] - min_xy[0]
         return height, width
     
-    map_data.layout = io.loadCMASSLayout(layout_file)
+    map_data.layout = io.loadLayoutJson(layout_file)
     height, width = get_map_region_size(map_data)
-    horizontal_pipeline_manager.log_to_monitor(map_data.name, {'Map Region': f'{height}, {width}'})
+    vertical_processing_pipeline.log_to_monitor(map_data.name, {'Map Region': f'{height}, {width}'})
     return map_data
 
 def main():
@@ -142,13 +142,22 @@ def main():
     map_names = [os.path.splitext(os.path.basename(f))[0] for f in args.data]
 
     # Construct pipeline
-    p = horizontal_pipeline_manager()
+    p = vertical_processing_pipeline()
+    p.workers = 8
+    p._monitor.timeout = 2
     # 1 Step Load
     #p.add_step(pipeline_step(func=load_map_wrapper, args=(pipeline_data_stream(args.data, names=map_names), None, pipeline_data_stream(layout_files, names=map_names), None), name='Loading Image', workers=2, max_output_size=10))
 
     # 2 Step Load
-    p.add_step(pipeline_step(func=load_map_wrapper, args=(pipeline_data_stream(args.data, names=map_names),), name='Loading Image', workers=2, max_output_size=10))
-    p.add_step(pipeline_step(func=add_layout_data, args=(p.steps[0].output(), pipeline_data_stream(layout_files, names=map_names)), name='Loading Layout', workers=1))
+    p.add_step(func=load_map_wrapper, args=(parameter_data_stream(args.data, names=map_names),), name='Loading Image')
+    p.add_step(func=add_layout_data, args=(p['Loading Image'].output(), parameter_data_stream(layout_files, names=map_names)), name='Loading Layout')
+
+    # 1 Step Load
+    #p.add_step(pipeline_step(func=load_map_wrapper, args=(pipeline_data_stream(args.data, names=map_names), None, pipeline_data_stream(layout_files, names=map_names), None), name='Loading Image', workers=2, max_output_size=10))
+
+    # 2 Step Load
+    # p.add_step(pipeline_step(func=load_map_wrapper, args=(pipeline_data_stream(args.data, names=map_names),), name='Loading Image', workers=2, max_output_size=10))
+    # p.add_step(pipeline_step(func=add_layout_data, args=(p.steps[0].output(), pipeline_data_stream(layout_files, names=map_names)), name='Loading Layout', workers=1))
     
     # Some ideas of what other steps will be added
     # idea is that each step passes the map data object to the next step

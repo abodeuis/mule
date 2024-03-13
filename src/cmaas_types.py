@@ -4,6 +4,9 @@ from rasterio.control import GroundControlPoint
 from rasterio.transform import from_gcps
 from enum import Enum
 from typing import List, Tuple
+import numpy as np
+
+DEBUG_MODE = True # Turns on debuging why two objects are not equal
 
 class MapUnitType(Enum):
     POINT = 1
@@ -12,7 +15,9 @@ class MapUnitType(Enum):
     UNKNOWN = 4
     def ALL():
         return [MapUnitType.POINT, MapUnitType.LINE, MapUnitType.POLYGON, MapUnitType.UNKNOWN]
-    
+    def ALL_KNOWN():
+        return [MapUnitType.POINT, MapUnitType.LINE, MapUnitType.POLYGON]
+
     def from_str(feature_type:str):
         if feature_type.lower() in ['pt','point']:
             return MapUnitType.POINT
@@ -78,11 +83,56 @@ class MapUnit():
             'overlay' : self.overlay,
             'bounding_box' : self.bbox.to_list() if self.bbox is not None else None
         }
+    
+    def __eq__(self, __value: object) -> bool:
+        if self.type != __value.type:
+            if DEBUG_MODE:
+                print(f'Type Mismatch: {self.type} != {__value.type}')
+            return False
+        if self.label != __value.label:
+            if DEBUG_MODE:
+                print(f'Label Mismatch: {self.label} != {__value.label}')
+            return False
+        if self.abbreviation != __value.abbreviation:
+            if DEBUG_MODE:
+                print(f'Abbreviation Mismatch: {self.abbreviation} != {__value.abbreviation}')
+            return False
+        if self.description != __value.description:
+            if DEBUG_MODE:
+                print(f'Description Mismatch: {self.description} != {__value.description}')
+            return False
+        if self.color != __value.color:
+            if DEBUG_MODE:
+                print(f'Color Mismatch: {self.color} != {__value.color}')
+            return False
+        if self.pattern != __value.pattern:
+            if DEBUG_MODE:
+                print(f'Pattern Mismatch: {self.pattern} != {__value.pattern}')
+            return False
+        if self.overlay != __value.overlay:
+            if DEBUG_MODE:
+                print(f'Overlay Mismatch: {self.overlay} != {__value.overlay}')
+            return False
+        if isinstance(self.bbox, (np.ndarray, np.generic)) or isinstance(__value.bbox, (np.ndarray, np.generic)):
+            if (self.bbox != __value.bbox).any():
+                if DEBUG_MODE:
+                    print(f'Bounding Box Mismatch: {self.bbox} != {__value.bbox}')
+                return False
+        else:
+            if self.bbox != __value.bbox:
+                if DEBUG_MODE:
+                    print(f'Bounding Box Mismatch: {self.bbox} != {__value.bbox}')
+                return False
+        if self.provenance != __value.provenance:
+            if DEBUG_MODE:
+                print(f'Provenance Mismatch: {self.provenance} != {__value.provenance}')
+            return False
+        return True
 
     def __str__(self) -> str:
         out_str = 'CMASS_Feature{\'' + self.label + '\'}'
         return out_str
-    
+
     def __repr__(self) -> str:
         repr_str = 'CMASS_Feature{'
         repr_str += f'type : \'{self.type}\', '
@@ -91,11 +141,8 @@ class MapUnit():
         repr_str += f'description : \'{self.description}\', '
         repr_str += f'color : \'{self.color}\', '
         repr_str += f'pattern : \'{self.pattern}\', '
-        repr_str += f'overlay : \'{self.overlay}\', '
-        repr_str += f'bbox : {self.bbox}, '
-        repr_str += f'provenance : \'{self.provenance}\', '
         #repr_str += f'mask : {self.mask.shape}, ' if self.mask is not None else f'mask : {self.mask}, ',
-        #repr_str += f'mask_confidence : {self.mask_confidence}'
+        repr_str += f'mask_confidence : {self.mask_confidence}'
         return repr_str
 
 class Legend():
@@ -124,6 +171,22 @@ class Legend():
     def __len__(self):
         return len(self.features)
     
+    def __eq__(self, __value: object) -> bool:
+        if self.provenance != __value.provenance:
+            if DEBUG_MODE:
+                print(f'Provenance Mismatch: {self.provenance} != {__value.provenance}')
+            return False
+        for unit in self.features:
+            if unit not in __value.features:
+                if DEBUG_MODE:
+                    print(f'Feature Mismatch: {unit} not in {__value.features}')
+                return False
+            if self.features[unit] != __value.features[unit]:
+                if DEBUG_MODE:
+                    print(f'Feature Mismatch: {self.features[unit]} != {__value.features[unit]}')
+                return False
+        return True
+
     def __str__(self) -> str:
         out_str = 'CMASS_Legend{' + f'{len(self.features)} Features : {self.features.keys()}' + '}'
         return out_str
@@ -142,6 +205,97 @@ class Layout():
         self.polygon_legend = polygon_legend
         self.provenance = provenance
 
+    def __str__(self) -> str:
+        out_str = 'CMASS_Layout{'
+        out_str += f'map : {self.map}, '
+        out_str += f'correlation_diagram : {self.correlation_diagram}, '
+        out_str += f'cross_section : {self.cross_section}, '
+        out_str += f'point_legend : {self.point_legend}, '
+        out_str += f'line_legend : {self.line_legend}, '
+        out_str += f'polygon_legend : {self.polygon_legend}, '
+        out_str += f'provenance : {self.provenance}'
+        out_str += '}'
+        return out_str
+    
+    def __repr__(self) -> str:
+        out_str = 'CMASS_Layout{'
+        out_str += f'map : {self.map}, '
+        out_str += f'correlation_diagram : {self.correlation_diagram}, '
+        out_str += f'cross_section : {self.cross_section}, '
+        out_str += f'point_legend : {self.point_legend}, '
+        out_str += f'line_legend : {self.line_legend}, '
+        out_str += f'polygon_legend : {self.polygon_legend}, '
+        out_str += f'provenance : {self.provenance}'
+        out_str += '}'
+        return out_str
+
+    def __eq__(self, __value: object) -> bool:
+        if isinstance(self.map, (np.ndarray, np.generic)) and isinstance(__value.map, (np.ndarray, np.generic)):
+            if (self.map != __value.map).any():
+                if DEBUG_MODE:
+                    print(f'Map Mismatch: {self.map} != {__value.map}')
+                return False
+        else:
+            if self.map != __value.map:
+                if DEBUG_MODE:
+                    print(f'Map Mismatch: {self.map} != {__value.map}')
+                return False
+        if isinstance(self.correlation_diagram, (np.ndarray, np.generic)) or isinstance(__value.correlation_diagram, (np.ndarray, np.generic)):
+            if (self.correlation_diagram != __value.correlation_diagram).any():
+                if DEBUG_MODE:
+                    print(f'Correlation Diagram Mismatch: {self.correlation_diagram} != {__value.correlation_diagram}')
+                return False
+        else:
+            if self.correlation_diagram != __value.correlation_diagram:
+                if DEBUG_MODE:
+                    print(f'Correlation Diagram Mismatch: {self.correlation_diagram} != {__value.correlation_diagram}')
+                return False
+        if isinstance(self.cross_section, (np.ndarray, np.generic)) or isinstance(__value.cross_section, (np.ndarray, np.generic)):
+            if (self.cross_section != __value.cross_section).any():
+                if DEBUG_MODE:
+                    print(f'Cross Section Mismatch: {self.cross_section} != {__value.cross_section}')
+                return False
+        else:
+            if self.cross_section != __value.cross_section:
+                if DEBUG_MODE:
+                    print(f'Cross Section Mismatch: {self.cross_section} != {__value.cross_section}')
+                return False
+        if isinstance(self.point_legend, (np.ndarray, np.generic)) or isinstance(__value.point_legend, (np.ndarray, np.generic)):
+            if (self.point_legend != __value.point_legend).any():
+                if DEBUG_MODE:
+                    print(f'Point Legend Mismatch: {self.point_legend} != {__value.point_legend}')
+                return False
+        else:
+            if self.point_legend != __value.point_legend:
+                if DEBUG_MODE:
+                    print(f'Point Legend Mismatch: {self.point_legend} != {__value.point_legend}')
+                return False
+        if isinstance(self.line_legend, (np.ndarray, np.generic)) or isinstance(__value.line_legend, (np.ndarray, np.generic)):
+            if (self.line_legend != __value.line_legend).any():
+                if DEBUG_MODE:
+                    print(f'Line Legend Mismatch: {self.line_legend} != {__value.line_legend}')
+                return False
+        else:
+            if self.line_legend != __value.line_legend:
+                if DEBUG_MODE:
+                    print(f'Line Legend Mismatch: {self.line_legend} != {__value.line_legend}')
+                return False
+        if isinstance(self.polygon_legend, (np.ndarray, np.generic)) or isinstance(__value.polygon_legend, (np.ndarray, np.generic)):
+            if (self.polygon_legend != __value.polygon_legend).any():
+                if DEBUG_MODE:
+                    print(f'Polygon Legend Mismatch: {self.polygon_legend} != {__value.polygon_legend}')
+                return False
+        else:
+            if self.polygon_legend != __value.polygon_legend:
+                if DEBUG_MODE:
+                    print(f'Polygon Legend Mismatch: {self.polygon_legend} != {__value.polygon_legend}')
+                return False
+        if self.provenance != __value.provenance:
+            if DEBUG_MODE:
+                print(f'Provenance Mismatch: {self.provenance} != {__value.provenance}')
+            return False
+        return True
+
 class GeoReference():
     def __init__(self, crs:CRS=None, transform:rasterio.transform.Affine=None, gcps:List[GroundControlPoint]=None, confidence:float=None, provenance=None):
         self.crs = crs
@@ -149,6 +303,29 @@ class GeoReference():
         self.gcps = gcps
         self.confidence = confidence
         self.provenance = provenance
+
+    def __eq__(self, __value: object) -> bool:
+        # Mark an object as equal if its crs and transform are equal
+        if self.crs is not None and self.transform is not None and __value.crs is not None and __value.transform is not None:
+            if self.crs != __value.crs:
+                if DEBUG_MODE:
+                    print(f'CRS Mismatch: {self.crs} != {__value.crs}')
+                return False
+            if self.transform != __value.transform:
+                if DEBUG_MODE:
+                    print(f'Transform Mismatch: {self.transform} != {__value.transform}')
+                return False
+        # Otherwise test on the gcps and provenance
+        else:
+            if self.gcps != __value.gcps:
+                if DEBUG_MODE:
+                    print(f'GCP Mismatch: {self.gcps} != {__value.gcps}')
+                return False
+            if self.provenance != __value.provenance:
+                if DEBUG_MODE:
+                    print(f'Provenance Mismatch: {self.provenance} != {__value.provenance}')
+                return False
+        return True
 
 class CMAAS_MapMetadata():
     def __init__(self, provenance:str, title:str, authors:List[str], publisher:str, url:str, source_url:str, year:int, organization:str, color_type:str, physiographic_region:str, scale:str, shape_type:str):
@@ -175,10 +352,40 @@ class CMAAS_Map():
         self.legend = legend
         self.layout = layout
         self.metadata = metadata
+        # Segmentation mask
+        self.mask = None
 
         # Utility field
         self.shape = self.image.shape
     
+    def __eq__(self, __value: object) -> bool:
+        if self.name != __value.name:
+            if DEBUG_MODE:
+                print(f'Name Mismatch: {self.name} != {__value.name}')
+            return False
+        if self.image.shape != __value.image.shape:
+            if DEBUG_MODE:
+                print(f'Shape Mismatch: {self.image.shape} != {__value.image.shape}')
+            return False
+        if self.georef != __value.georef:
+            if DEBUG_MODE:
+                print(f'GeoReference Mismatch: {self.georef} != {__value.georef}')
+            return False
+        if self.legend != __value.legend:
+            if DEBUG_MODE:
+                print(f'Legend Mismatch: {self.legend} != {__value.legend}')
+            return False
+        if self.layout != __value.layout:
+            if DEBUG_MODE:
+                print(f'Layout Mismatch: {self.layout} != {__value.layout}')
+            return False
+        # Not implemented yet
+        # if self.metadata != __value.metadata:
+        #     if DEBUG_MODE:
+        #         print(f'Metadata Mismatch: {self.metadata} != {__value.metadata}')
+        #     return False
+        return True
+
     def __str__(self) -> str:
         out_str = 'CMASS_Map{'
         out_str += f'name : \'{self.name}\', '
@@ -201,3 +408,4 @@ class CMAAS_Map():
         repr_str += '}'
         return repr_str
     
+
