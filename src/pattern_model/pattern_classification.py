@@ -31,9 +31,9 @@ class MapUnitClassifier:
         legend_labels = []
         for label, map_unit in map_data.legend.features.items():
             legend_labels.append(label)
-            min_pt, max_pt = utils.boundingBox(map_unit.contour) # Need this as points order can be reverse or could have quad
+            min_pt, max_pt = utils.boundingBox(map_unit.bbox) # Need this as points order can be reverse or could have quad
             legend_img = map_data.image[:,min_pt[1]:max_pt[1], min_pt[0]:max_pt[0]]
-            legend_img = tf.image.resize(legend_img, (self.image_size, self.image_size))
+            legend_img = tf.image.resize(legend_img, (self.image_size[0], self.image_size[1]))
             legend_img = legend_img / 255.0  # Normalize pixel values
             legend_images.concatenate(legend_img, axis=0)
         

@@ -11,7 +11,7 @@ def load_map_wrapper(image_path, legend_path=None, layout_path=None, georef_path
     return map_data
 
 # Step 1
-def add_layout_data(map_data, layout_file):
+def add_precomputed_layout_data(map_data, layout_file):
     def get_map_region_size(map_data):
         _, height, width = map_data.image.shape
         if map_data.layout is not None:
@@ -26,6 +26,11 @@ def add_layout_data(map_data, layout_file):
     vertical_processing_pipeline.log_to_monitor(map_data.name, {'Map Region': f'{height}, {width}'})
     return map_data
 
+def add_precomputed_legend_data(map_data, legend_file):
+    map_data.legend = io.loadLegendJson(legend_file)
+    vertical_processing_pipeline.log_to_monitor(map_data.name, {'Map Units': f'{len(map_data.legend.features)}'})
+    return map_data
+
 def load_pattern_model(filepath):
     from src.pattern_model.pattern_classification import MapUnitClassifier
     classifier_model = MapUnitClassifier(model_path=filepath,image_size=224)
@@ -34,4 +39,3 @@ def load_pattern_model(filepath):
 def classify_legend_pattern(map_data, classifier_model, image_size = 224):
     map_data = classifier_model.inference_map_data(map_data)
     return map_data
-

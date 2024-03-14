@@ -35,6 +35,9 @@ class parameter_data_stream():
         dm = p_data_message(id, data, name=name)
         self._queue.put(dm)
 
+    def put(self, data):
+        self._queue.put(data)
+
     def get(self):
         return self._queue.get()
 
@@ -240,9 +243,15 @@ def _start_worker(pipeline_steps, log_stream, management_stream):
             for step in pipeline_steps:
                 func_args = []
                 arg_data = None
+                item_id = None
                 for arg in step.args:
                     if isinstance(arg, parameter_data_stream):
                         arg_data = arg.get()
+                        if item_id == None:
+                            item_id = arg_data.id
+                        while arg_data.id != item_id:
+                            arg.put(arg_data)
+                            arg_data = arg.get()
                         func_args.append(arg_data.data)
                     else:
                         func_args.append(arg)
@@ -365,10 +374,11 @@ class vertical_processing_pipeline():
                 record = self._log_stream.get()
                 if record.log_level is not None and record.message is not None:
                     log.log(record.log_level, record.message)
+                # if record.log_level is None and record.message is not None:
+                #     log.log(logging.DEBUG, record.message)
                 
                 # Update monitor table
-                if record.step_id is not None:
-                    _monitor.update_data(record)
+                _monitor.update_data(record)
                 live.update(_monitor.generate_table())
             swap_console_handler(log, logging_handler)
 

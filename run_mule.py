@@ -8,6 +8,7 @@ import src.utils as utils
 from src.vertical_processing_pipeline import vertical_processing_pipeline, vertical_pipeline_step, parameter_data_stream
 
 LOGGER_NAME = 'CMASS_MULE'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # tf log level, 2 is error only
 
 def parse_command_line():
     from typing import List
@@ -65,10 +66,6 @@ def parse_command_line():
                     nargs='+',
                     help='Path to file(s) and/or directory(s) containing the data to perform inference on. The \
                             program will run inference on any .tif files.')
-    required_args.add_argument('--layout',
-                    type=parse_directory,
-                    required=True,
-                    help='Directory containing the layout files to use. Temporarily need this until we have the layout code')
     # Optional Arguments
     optional_args = parser.add_argument_group('optional arguments', '')
     
@@ -86,6 +83,15 @@ def parse_command_line():
     optional_args.add_argument('--log',
                     default='logs/Latest.log',
                     help='Option to set the file logging will output to. Defaults to "logs/Latest.log"')
+    # Optional Arguments
+    optional_args.add_argument('--layouts',
+                    type=parse_directory,
+                    required=True,
+                    help='Directory containing the layout files to use. Temporarily need this until we have the layout code')
+    optional_args.add_argument('--legends',
+                    type=parse_directory,
+                    default=None,
+                    help='Directory containing the legend files to use. Temporarily need this until we have the legend code')
     # Flags
     flag_group = parser.add_argument_group('Flags', '')
     flag_group.add_argument('-h', '--help',
@@ -98,7 +104,7 @@ def parse_command_line():
     args.data = post_parse_data(args.data)
     return args
 
-from src.mysteps import load_map_wrapper, add_layout_data, load_pattern_model, classify_legend_pattern
+from src.mysteps import load_map_wrapper, add_precomputed_layout_data, add_precomputed_legend_data, load_pattern_model, classify_legend_pattern
 
 def main():
     main_stime = time()
@@ -117,19 +123,24 @@ def main():
             f'\tFeedback     : {args.feedback}')
 
     # Format the data
-    layout_files = [os.path.join(args.layout, os.path.splitext(os.path.basename(f))[0] + '.json') for f in args.data]
     map_names = [os.path.splitext(os.path.basename(f))[0] for f in args.data]
 
     log.info(f'preloading models')
-    pmodel = load_pattern_model('checkpoints/pattern_clasification_model.hdf5')
+    pmodel = load_pattern_model('/projects/bbym/nathanj/attentionUnet/pattern/pattern_clasification_model.hdf5')
 
     # Construct pipeline
     p = vertical_processing_pipeline()
-    p.workers = 8
+    p.workers = 4
     p._monitor.timeout = 2
     # 1 Step Load
-    p.add_step(func=load_map_wrapper, args=(parameter_data_stream(args.data, names=map_names), None, parameter_data_stream(layout_files, names=map_names), None), name='Loading Image')
-    p.add_step(func=classify_legend_pattern, args=(p['Loading Image'].output(), pmodel), name='Classifying Pattern')
+    p.add_step(func=load_map_wrapper, args=(parameter_data_stream(args.data, names=map_names),), name='Loading Image')
+    if args.layouts is not None:
+        layout_files = [os.path.join(args.layouts, os.path.splitext(os.path.basename(f))[0] + '.json') for f in args.data]
+        p.add_step(func=add_precomputed_layout_data, args=(p.steps[0].output(), parameter_data_stream(layout_files, names=map_names)), name='Loading Uncharted Layout')
+    if args.legends is not None:
+        legend_files = [os.path.join(args.legends, os.path.splitext(os.path.basename(f))[0] + '.json') for f in args.data]
+        p.add_step(func=add_precomputed_legend_data, args=(p.steps[1].output(), parameter_data_stream(legend_files, names=map_names)), name='Loading UGSG Legend')
+    #p.add_step(func=classify_legend_pattern, args=(p.steps[2].output(), pmodel), name='Classifying Pattern')
 
     # 2 Step Load
     #p.add_step(func=load_map_wrapper, args=(parameter_data_stream(args.data, names=map_names),), name='Loading Image')
@@ -151,6 +162,7 @@ def main():
     #    p.add_step(pipeline_step(func=validation, args=(p.step[6].output(),), name='Validation'))
 
     # Run pipeline
+    log.warning(f'Starting pipeline with {len(p.steps)} steps')
     p.start()
     p.monitor()
 
