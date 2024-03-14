@@ -98,28 +98,7 @@ def parse_command_line():
     args.data = post_parse_data(args.data)
     return args
 
-# Step 0
-def load_map_wrapper(image_path, legend_path=None, layout_path=None, georef_path=None):
-    """Wrapper with a custom display for the monitor"""
-    map_data = io.loadCMASSMap(image_path, legend_path, layout_path, georef_path)
-    vertical_processing_pipeline.log_to_monitor(map_data.name, {'Shape': map_data.shape})
-    return map_data
-
-# Step 1
-def add_layout_data(map_data, layout_file):
-    def get_map_region_size(map_data):
-        _, height, width = map_data.image.shape
-        if map_data.layout is not None:
-            if map_data.layout.map is not None:
-                min_xy, max_xy = utils.boundingBox(map_data.layout.map)
-                height = max_xy[1] - min_xy[1]
-                width = max_xy[0] - min_xy[0]
-        return height, width
-    
-    map_data.layout = io.loadLayoutJson(layout_file)
-    height, width = get_map_region_size(map_data)
-    vertical_processing_pipeline.log_to_monitor(map_data.name, {'Map Region': f'{height}, {width}'})
-    return map_data
+from src.mysteps import load_map_wrapper, add_layout_data, load_pattern_model, classify_legend_pattern
 
 def main():
     main_stime = time()
@@ -141,24 +120,22 @@ def main():
     layout_files = [os.path.join(args.layout, os.path.splitext(os.path.basename(f))[0] + '.json') for f in args.data]
     map_names = [os.path.splitext(os.path.basename(f))[0] for f in args.data]
 
+    log.info(f'preloading models')
+    pmodel = load_pattern_model('checkpoints/pattern_clasification_model.hdf5')
+
     # Construct pipeline
     p = vertical_processing_pipeline()
     p.workers = 8
     p._monitor.timeout = 2
     # 1 Step Load
-    #p.add_step(pipeline_step(func=load_map_wrapper, args=(pipeline_data_stream(args.data, names=map_names), None, pipeline_data_stream(layout_files, names=map_names), None), name='Loading Image', workers=2, max_output_size=10))
+    p.add_step(func=load_map_wrapper, args=(parameter_data_stream(args.data, names=map_names), None, parameter_data_stream(layout_files, names=map_names), None), name='Loading Image')
+    p.add_step(func=classify_legend_pattern, args=(p['Loading Image'].output(), pmodel), name='Classifying Pattern')
 
     # 2 Step Load
-    p.add_step(func=load_map_wrapper, args=(parameter_data_stream(args.data, names=map_names),), name='Loading Image')
-    p.add_step(func=add_layout_data, args=(p['Loading Image'].output(), parameter_data_stream(layout_files, names=map_names)), name='Loading Layout')
-
-    # 1 Step Load
-    #p.add_step(pipeline_step(func=load_map_wrapper, args=(pipeline_data_stream(args.data, names=map_names), None, pipeline_data_stream(layout_files, names=map_names), None), name='Loading Image', workers=2, max_output_size=10))
-
-    # 2 Step Load
-    # p.add_step(pipeline_step(func=load_map_wrapper, args=(pipeline_data_stream(args.data, names=map_names),), name='Loading Image', workers=2, max_output_size=10))
-    # p.add_step(pipeline_step(func=add_layout_data, args=(p.steps[0].output(), pipeline_data_stream(layout_files, names=map_names)), name='Loading Layout', workers=1))
+    #p.add_step(func=load_map_wrapper, args=(parameter_data_stream(args.data, names=map_names),), name='Loading Image')
+    #p.add_step(func=add_layout_data, args=(p['Loading Image'].output(), parameter_data_stream(layout_files, names=map_names)), name='Loading Layout')
     
+
     # Some ideas of what other steps will be added
     # idea is that each step passes the map data object to the next step
     # p.add_step(pipeline_step(func=gen_layout, args=(p.step[0].output(),), name='Layout')) 
